@@ -1,6 +1,8 @@
-crewai
-crewai-tools
-langchain-openai
-langchain-community
-tavily-python
-streamlit
+tiktoken==0.7.0
+crewai==0.80.0
+crewai-tools==0.20.0
+langchain-openai==0.2.14
+langchain-community==0.3.14
+tavily-python==0.5.0
+streamlit==1.41.0
+pydantic>=2.0,<3.0
