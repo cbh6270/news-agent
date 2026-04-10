@@ -306,10 +306,15 @@ def run_pipeline(keyword: str, target_reader: str, send_to_email: str = None) ->
 
 # ── 실행 진입점 ───────────────────────────────────────────────────────
 if __name__ == '__main__':
-    # ✅ 매일 자동 실행될 키워드와 독자 설정
-    KEYWORD       = '삼성전자 반도체'
-    TARGET_READER = 'IT 업계 투자자'
+    # 수동 실행 시 입력창 값 사용, 없으면 아래 기본값 사용
+    # ✅ 매일 자동 실행 기본값 → 여기서 수정
+    KEYWORD       = os.environ.get('INPUT_KEYWORD')  or '삼성전자 반도체'
+    TARGET_READER = os.environ.get('INPUT_READER')   or 'IT 업계 투자자'
     SEND_TO       = GMAIL_ADDRESS
+
+    print(f'\n🔑 실행 설정')
+    print(f'   키워드 : {KEYWORD}')
+    print(f'   독자   : {TARGET_READER}')
 
     result = run_pipeline(
         keyword=KEYWORD,
