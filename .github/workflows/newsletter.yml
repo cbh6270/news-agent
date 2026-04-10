@@ -7,32 +7,39 @@ on:
 
   # 수동 실행 버튼 (테스트할 때 사용)
   workflow_dispatch:
+    inputs:
+      keyword:
+        description: '분석할 키워드 (예: 삼성전자 반도체)'
+        required: true
+        default: '삼성전자 반도체'
+      target_reader:
+        description: '독자 페르소나 (예: IT 업계 투자자)'
+        required: true
+        default: 'IT 업계 투자자'
 
 jobs:
   send-newsletter:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 레포 코드 가져오기
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
-      # 2. Python 설치
       - name: Python 3.11 설치
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3. 필요한 패키지 설치
       - name: 패키지 설치
         run: |
           pip install crewai crewai-tools langchain-openai langchain-community tavily-python
 
-      # 4. API 키를 환경변수로 주입 (GitHub Secrets에서 읽어옴)
       - name: 뉴스레터 파이프라인 실행
         env:
-          OPENAI_API_KEY:   ${{ secrets.OPENAI_API_KEY }}
-          TAVILY_API_KEY:   ${{ secrets.TAVILY_API_KEY }}
-          GMAIL_ADDRESS:    ${{ secrets.GMAIL_ADDRESS }}
+          OPENAI_API_KEY:     ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY:     ${{ secrets.TAVILY_API_KEY }}
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          INPUT_KEYWORD:      ${{ github.event.inputs.keyword }}
+          INPUT_READER:       ${{ github.event.inputs.target_reader }}
         run: python main.py
