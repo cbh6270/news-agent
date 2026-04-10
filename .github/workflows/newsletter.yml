@@ -1,0 +1,38 @@
+name: 뉴스레터 자동 발송
+
+on:
+  schedule:
+    # 매일 오전 8시 (한국시간 KST = UTC+9, 그래서 UTC 23시 = KST 8시)
+    - cron: '0 23 * * *'
+
+  # 수동 실행 버튼 (테스트할 때 사용)
+  workflow_dispatch:
+
+jobs:
+  send-newsletter:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 레포 코드 가져오기
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      # 2. Python 설치
+      - name: Python 3.11 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. 필요한 패키지 설치
+      - name: 패키지 설치
+        run: |
+          pip install crewai crewai-tools langchain-openai langchain-community tavily-python
+
+      # 4. API 키를 환경변수로 주입 (GitHub Secrets에서 읽어옴)
+      - name: 뉴스레터 파이프라인 실행
+        env:
+          OPENAI_API_KEY:   ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY:   ${{ secrets.TAVILY_API_KEY }}
+          GMAIL_ADDRESS:    ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python main.py
