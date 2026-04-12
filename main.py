@@ -2,46 +2,45 @@
 실시간 뉴스 분석 & 이메일 자동화 에이전트
 GitHub Actions에서 매일 자동 실행되는 메인 스크립트
 """
- 
+
 import os
 import sendgrid
 from sendgrid.helpers.mail import Mail, Content
- 
+
 from langchain_openai import ChatOpenAI
 from crewai import Agent, Task, Crew, Process
 from crewai_tools import TavilySearchTool
- 
+
 # ── API 키 설정 ────────────────────────────────────────────────────────
-# GitHub Actions에서는 Colab Secrets 대신 GitHub Secrets에서 읽어옴
-# GitHub 레포 → Settings → Secrets and variables → Actions 에서 등록
-OPENAI_API_KEY  = os.environ.get('OPENAI_API_KEY')
-TAVILY_API_KEY  = os.environ.get('TAVILY_API_KEY')
-GMAIL_ADDRESS   = os.environ.get('GMAIL_ADDRESS')
-GMAIL_APP_PW    = os.environ.get('GMAIL_APP_PASSWORD')
- 
+OPENAI_API_KEY   = os.environ.get('OPENAI_API_KEY')
+TAVILY_API_KEY   = os.environ.get('TAVILY_API_KEY')
+GMAIL_ADDRESS    = os.environ.get('GMAIL_ADDRESS')
+GMAIL_APP_PW     = os.environ.get('GMAIL_APP_PASSWORD')
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+
 # 키 로드 확인
 print(f'✅ OPENAI_API_KEY     로드 완료 (길이: {len(OPENAI_API_KEY)}자)')
 print(f'✅ TAVILY_API_KEY     로드 완료 (길이: {len(TAVILY_API_KEY)}자)')
 print(f'✅ GMAIL_ADDRESS      로드 완료 ({GMAIL_ADDRESS[:4]}...)')
 print(f'✅ GMAIL_APP_PASSWORD 로드 완료 (길이: {len(GMAIL_APP_PW)}자)')
- 
+print(f'✅ SENDGRID_API_KEY   로드 완료 (길이: {len(SENDGRID_API_KEY) if SENDGRID_API_KEY else 0}자)')
+
 os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
 os.environ['TAVILY_API_KEY'] = TAVILY_API_KEY
- 
+
 # ── LLM 초기화 ────────────────────────────────────────────────────────
-# ✅ 모델 변경이 필요하면 여기만 수정
 MODEL_NAME = 'gpt-4o-mini'
- 
+
 llm_researcher = ChatOpenAI(model=MODEL_NAME, temperature=0.2)
 llm_writer     = ChatOpenAI(model=MODEL_NAME, temperature=0.5)
- 
+
 # ── CrewAI 에이전트 & 도구 정의 ───────────────────────────────────────
 tavily_tool = TavilySearchTool(
     max_results=3,
     search_depth='advanced',
     include_raw_content=False
 )
- 
+
 researcher = Agent(
     role='시니어 뉴스 리서처',
     goal=(
@@ -60,7 +59,7 @@ researcher = Agent(
     verbose=True,
     allow_delegation=False
 )
- 
+
 writer = Agent(
     role='B2B 뉴스레터 에디터',
     goal=(
@@ -79,40 +78,40 @@ writer = Agent(
     verbose=True,
     allow_delegation=False
 )
- 
+
 print('✅ CrewAI 에이전트 정의 완료')
- 
- 
+
+
 # ── Task 정의 ─────────────────────────────────────────────────────────
 def create_tasks(keyword: str, target_reader: str) -> tuple:
     task_research = Task(
         description=f"""
         [주제 키워드]: {keyword}
         [목표 독자]:  {target_reader}
- 
+
         아래 4단계를 순서대로 수행하라.
- 
+
         ## 1단계 - Retrieval (검색)
         Tavily로 "{keyword} 최신 뉴스"를 검색하여 관련성 높은 기사 5개를 수집한다.
         반드시 실제 검색 결과를 사용하고, 학습 데이터에서 내용을 지어내지 않는다.
- 
+
         ## 2단계 - 데이터 정제 (Prompt Chain 1)
         수집한 기사에서 다음 항목을 제거한다:
         - 광고성 문구, 구독 유도 문구
         - 중복되는 내용
         - 기자 이름, 발행 시각 등 메타정보
         - 의미 없는 수식어
- 
+
         ## 3단계 - 핵심 수치 추출 (Prompt Chain 2)
         정제된 내용에서 의사결정에 필요한 정보만 뽑아 구조화한다:
         - 구체적인 수치 (%, 금액, 증감률, 날짜)
         - 핵심 사건 3가지
         - 시장 트렌드 방향성
         - 주목할 리스크
- 
+
         ## 4단계 - 출처 기록
         사용한 기사의 URL을 모두 기록한다. (팩트체크 근거)
- 
+
         ## 5단계 - 언어 통일
         위에서 추출한 모든 수치와 내용을 한국어로 번역하라.
         단, 고유명사(회사명, 인명, 브랜드명)와 URL은 영어 그대로 유지한다.
@@ -120,45 +119,45 @@ def create_tasks(keyword: str, target_reader: str) -> tuple:
         """,
         expected_output=f"""
         아래 형식을 정확히 지켜서 출력하라:
- 
+
         ## 📊 핵심 수치
         아래 형식으로 정렬해서 출력하라 (모두 한국어로):
         이모지 항목명 : 수치 (한 줄 설명)
         예시)
         💰 총 투자액    : 170억 달러 (텍사스 팹 기준)
         👥 고용 인원    : 1,500명 (2026년까지 예정)
- 
+
         ## 📰 주요 사건/발표 TOP 3
         1. (가장 중요한 사건)
         2.
         3.
- 
+
         ## 💡 시장 인사이트
         - (트렌드 및 방향성 2~3가지)
- 
+
         ## ⚠️ 주목할 리스크
         - (부정적 신호 1~2가지)
- 
+
         ## 🔗 참고 출처
         - (URL 목록)
         """,
         agent=researcher
     )
- 
+
     task_write = Task(
         description=f"""
         [주제 키워드]: {keyword}
         [목표 독자]:  {target_reader}
- 
+
         리서처(Agent A)가 전달한 인사이트를 바탕으로 아래 2단계를 수행하라.
         절대로 리서처가 제공하지 않은 정보를 추가하거나 지어내지 않는다.
- 
+
         ## 1단계 - 3줄 핵심 요약 (Prompt Chain 3)
         {target_reader}가 30초 안에 핵심을 파악할 수 있는 3줄 요약 작성:
         - 각 줄은 하나의 메시지만 담을 것
         - 반드시 구체적인 수치 포함
         - 각 줄 앞에 관련 이모지 1개
- 
+
         ## 2단계 - 이메일 초안 작성 (Prompt Chain 4)
         아래 구조로 뉴스레터 이메일 전체를 작성한다:
         - 클릭하고 싶은 이메일 제목 (숫자 또는 임팩트 있는 표현 포함)
@@ -172,37 +171,37 @@ def create_tasks(keyword: str, target_reader: str) -> tuple:
         """,
         expected_output=f"""
         아래 형식을 정확히 지켜서 출력하라:
- 
+
         ===이메일 제목===
         (제목 내용)
         ===이메일 제목 끝===
- 
+
         ===이메일 본문===
         안녕하세요, {target_reader}님 👋
- 
+
         오늘의 주제: **{keyword}**
- 
+
         📌 **오늘의 핵심 3줄**
         (3줄 요약)
- 
+
         ---
- 
+
         📊 **주요 수치 & 팩트**
         아래 형식으로 표처럼 정렬해서 출력하라 (반드시 한국어로):
         이모지 항목명 : 수치 (한 줄 설명)
         예시)
         💰 총 투자액    : 170억 달러 (텍사스 팹 기준)
         👥 고용 인원    : 1,500명 (2026년까지 예정)
- 
+
         💡 **에디터 인사이트**
         (독자에게 의미하는 바 2~3문장)
- 
+
         ⚠️ **주목할 리스크**
         (리스크 1~2가지)
- 
+
         🔗 **참고 출처**
         (URL 목록)
- 
+
         ---
         본 뉴스레터는 AI 에이전트가 자동 수집·분석한 내용입니다.
         ===이메일 본문 끝===
@@ -210,11 +209,11 @@ def create_tasks(keyword: str, target_reader: str) -> tuple:
         agent=writer,
         context=[task_research]
     )
- 
+
     return task_research, task_write
- 
- 
-# ── Gmail 발송 모듈 ───────────────────────────────────────────────────
+
+
+# ── 이메일 발송 모듈 ──────────────────────────────────────────────────
 def parse_email_result(crew_output: str) -> dict:
     subject = ''
     body = ''
@@ -231,19 +230,19 @@ def parse_email_result(crew_output: str) -> dict:
         subject = '[뉴스레터] AI 뉴스 인사이트 리포트'
         body = crew_output
     return {'subject': subject, 'body': body}
- 
- 
+
+
 def send_gmail(to_email: str, subject: str, body: str) -> bool:
     """
     SendGrid API를 통해 이메일을 발송합니다.
-    Gmail SMTP 대신 SendGrid를 사용하여 클라우드 환경에서도 발송 가능
+    전역변수 SENDGRID_API_KEY 사용 (함수 안에서 다시 읽지 않음)
     """
     try:
-        SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+        # 전역변수 직접 사용 (os.environ.get 재호출 안 함)
         if not SENDGRID_API_KEY:
             print('❌ SENDGRID_API_KEY가 없어요.')
             return False
- 
+
         html_body = body.replace('\n', '<br>')
         html_content = f"""
         <html><body>
@@ -261,29 +260,29 @@ def send_gmail(to_email: str, subject: str, body: str) -> bool:
         </div>
         </body></html>
         """
- 
+
         message = Mail(
             from_email=GMAIL_ADDRESS,
             to_emails=to_email,
             subject=subject,
             html_content=html_content
         )
- 
+
         sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
         response = sg.send(message)
- 
+
         if response.status_code in [200, 201, 202]:
             print(f'✅ 이메일 발송 성공 → {to_email}')
             return True
         else:
             print(f'❌ 발송 실패: status {response.status_code}')
             return False
- 
+
     except Exception as e:
         print(f'❌ 발송 실패: {e}')
         return False
- 
- 
+
+
 # ── 전체 파이프라인 ───────────────────────────────────────────────────
 def run_pipeline(keyword: str, target_reader: str, send_to_email: str = None) -> dict:
     print('=' * 60)
@@ -292,55 +291,53 @@ def run_pipeline(keyword: str, target_reader: str, send_to_email: str = None) ->
     print(f'   독자   : {target_reader}')
     print(f'   발송처 : {send_to_email or "발송 생략"}')
     print('=' * 60)
- 
+
     task_research, task_write = create_tasks(keyword, target_reader)
- 
+
     crew = Crew(
         agents=[researcher, writer],
         tasks=[task_research, task_write],
         process=Process.sequential,
         verbose=True
     )
- 
+
     print('\n⚙️  CrewAI 실행 중...\n')
     crew_result = crew.kickoff()
     result_text = str(crew_result)
     parsed = parse_email_result(result_text)
- 
+
     send_success = False
     if send_to_email:
         print(f'\n📧 이메일 발송 중 → {send_to_email}')
         send_success = send_gmail(send_to_email, parsed['subject'], parsed['body'])
- 
+
     print('\n' + '=' * 60)
     print('✅ 파이프라인 완료!')
     print('=' * 60)
- 
+
     return {
         'keyword'      : keyword,
         'subject'      : parsed['subject'],
         'body'         : parsed['body'],
         'send_success' : send_success
     }
- 
- 
+
+
 # ── 실행 진입점 ───────────────────────────────────────────────────────
 if __name__ == '__main__':
-    # 수동 실행 시 입력창 값 사용, 없으면 아래 기본값 사용
-    # ✅ 매일 자동 실행 기본값 → 여기서 수정
     KEYWORD       = os.environ.get('INPUT_KEYWORD')  or '삼성전자 반도체'
     TARGET_READER = os.environ.get('INPUT_READER')   or 'IT 업계 투자자'
     SEND_TO       = GMAIL_ADDRESS
- 
+
     print(f'\n🔑 실행 설정')
     print(f'   키워드 : {KEYWORD}')
     print(f'   독자   : {TARGET_READER}')
- 
+
     result = run_pipeline(
         keyword=KEYWORD,
         target_reader=TARGET_READER,
         send_to_email=SEND_TO
     )
- 
+
     print(f'\n제목: {result["subject"]}')
     print(result['body'])
