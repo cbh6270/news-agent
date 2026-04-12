@@ -160,3 +160,6 @@ with st.expander("🏗️ 기술 스택 보기"):
 
     **Agent B (Writer)**: 인사이트 → 3줄 요약 → 뉴스레터 이메일 작성
     """)
+
+if __name__ == "__main__":
+    demo.launch(server_name="0.0.0.0", server_port=7860)
