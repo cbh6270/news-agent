@@ -37,9 +37,9 @@ llm_writer     = ChatOpenAI(model=MODEL_NAME, temperature=0.5)
  
 # ── CrewAI 에이전트 & 도구 정의 ───────────────────────────────────────
 tavily_tool = TavilySearchTool(
-    max_results=5,
+    max_results=3,
     search_depth='advanced',
-    include_raw_content=True
+    include_raw_content=False
 )
  
 researcher = Agent(
