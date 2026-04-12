@@ -1,3 +1,4 @@
+gradio
 crewai
 crewai-tools
 langchain-openai
